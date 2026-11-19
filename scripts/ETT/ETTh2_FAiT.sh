@@ -1,6 +1,8 @@
-if [ ! -d "./logs/FAiT/ablation/attn" ]; then
-    mkdir -p ./logs/FAiT/ablation/attn
-fi
+#!/usr/bin/env bash
+set -eo pipefail
+source ./scripts/fait_routing.bash
+configure_fait_routing ./logs/FAiT/ablation/attn "$@"
+
 
 # forecasting_ETTh2_FAiT_96_96_e1_s0_p1_o1_attn_ablation_250826_174132_FAiT_ETTh2_sl-96_pl-96_var-7_dm-1024_stages-4_2P1i_1P1i_dec-2_des-Exp_0  
 # mae: 0.33092, mse: 0.28089, r2: -1.20227, pear: 0.42591, mase: 4.43593
@@ -41,11 +43,15 @@ do
 
     seq_len=${seq_lens[i]}
     pred_len=${pred_lens[i]}
+    if [[ "$only_horizon" != all && "$pred_len" != "$only_horizon" ]]; then
+        continue
+    fi
 
     export CUDA_VISIBLE_DEVICES=${cuda_ids1[i]}
 
     python -u run.py \
       --is_training 1 \
+      --spectral_routing "$route_mode" \
       --root_path ./dataset/ETT-small/ \
       --data_path ETTh2.csv \
       --model_id ETTh2_FAiT_${seq_len}_${pred_len}_e${attn_enhance}_s${attn_softmax_flag}\
@@ -89,6 +95,6 @@ _p${attn_weight_plus}_o${attn_outside_softmax}_attn_ablation \
       --attn_softmax_flag ${attn_softmax_flag} \
       --attn_weight_plus ${attn_weight_plus} \
       --attn_outside_softmax ${attn_outside_softmax} \
-      2>&1 | tee -a logs/FAiT/ablation/attn/FAiT_attn_abl_ETTh2_${seq_len}_${pred_len}_e${attn_enhance}\
+      2>&1 | tee -a "$log_dir"/FAiT_attn_abl_ETTh2_${seq_len}_${pred_len}_e${attn_enhance}\
 _s${attn_softmax_flag}_p${attn_weight_plus}_o${attn_outside_softmax}.log 
 done

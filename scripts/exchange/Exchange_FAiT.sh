@@ -1,6 +1,8 @@
-if [ ! -d "./logs/FAiT/ablation/attn" ]; then
-    mkdir -p ./logs/FAiT/ablation/attn
-fi
+#!/usr/bin/env bash
+set -eo pipefail
+source ./scripts/fait_routing.bash
+configure_fait_routing ./logs/FAiT/ablation/attn "$@"
+
 
 model_name=FAiT
 
@@ -42,11 +44,15 @@ do
 
     seq_len=${seq_lens[i]}
     pred_len=${pred_lens[i]}
+    if [[ "$only_horizon" != all && "$pred_len" != "$only_horizon" ]]; then
+        continue
+    fi
 
     export CUDA_VISIBLE_DEVICES=${cuda_ids1[i]}
 
     python -u run.py \
       --is_training 1 \
+      --spectral_routing "$route_mode" \
       --root_path ./dataset/exchange_rate/ \
       --data_path exchange_rate.csv \
       --model_id Exchange_FAiT_${seq_len}_${pred_len}_e${attn_enhance}_s${attn_softmax_flag}\
@@ -90,7 +96,7 @@ _p${attn_weight_plus}_o${attn_outside_softmax}_attn_ablation \
       --attn_softmax_flag ${attn_softmax_flag} \
       --attn_weight_plus ${attn_weight_plus} \
       --attn_outside_softmax ${attn_outside_softmax} \
-      2>&1 | tee -a logs/FAiT/ablation/attn/FAiT_attn_abl_Exchange_${seq_len}_${pred_len}_e${attn_enhance}\
+      2>&1 | tee -a "$log_dir"/FAiT_attn_abl_Exchange_${seq_len}_${pred_len}_e${attn_enhance}\
 _s${attn_softmax_flag}_p${attn_weight_plus}_o${attn_outside_softmax}.log 
 done
 

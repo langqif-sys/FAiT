@@ -1,6 +1,8 @@
-if [ ! -d "./logs/FAiT/ablation/attn" ]; then
-    mkdir -p ./logs/FAiT/ablation/attn
-fi
+#!/usr/bin/env bash
+set -eo pipefail
+source ./scripts/fait_routing.bash
+configure_fait_routing ./logs/FAiT/ablation/attn "$@"
+
 
 # forecasting_Weather_d256_e32_b32_l2_lr5e-4_sf0_wp1_os1_250829_211954_FAiT_custom_sl-96_pl-96_var-21_dm-256_stages-4_2P2i_1P1i_dec-2_des-Exp_0  
 # mae: 0.19034, mse: 0.15454, r2: -10.57742, pear: 0.41655, mase: 12.11435
@@ -46,12 +48,16 @@ do
 
         seq_len=${seq_lens[i]}
         pred_len=${pred_lens[i]}
+        if [[ "$only_horizon" != all && "$pred_len" != "$only_horizon" ]]; then
+            continue
+        fi
         train_ratio=${train_ratios[i]}
 
         export CUDA_VISIBLE_DEVICES=${cuda_ids1[i]}
 
         python -u run.py \
           --is_training 1 \
+          --spectral_routing "$route_mode" \
           --root_path ./dataset/weather/ \
           --data_path weather.csv \
           --model_id Weather_FAiT_${seq_len}_${pred_len}_${lradj[i]}_e${attn_enhance}_s${attn_softmax_flag[k1]}\
@@ -95,7 +101,7 @@ _p${attn_weight_plus[k2]}_o${attn_outside_softmax[k3]}_attn_ablation \
           --attn_softmax_flag ${attn_softmax_flag[k1]} \
           --attn_weight_plus ${attn_weight_plus[k2]} \
           --attn_outside_softmax ${attn_outside_softmax[k3]} \
-          2>&1 | tee -a logs/FAiT/ablation/attn/FAiT_attn_abl_Weather_${seq_len}_${pred_len}_e${attn_enhance}\
+          2>&1 | tee -a "$log_dir"/FAiT_attn_abl_Weather_${seq_len}_${pred_len}_e${attn_enhance}\
 _s${attn_softmax_flag[k1]}_p${attn_weight_plus[k2]}_o${attn_outside_softmax[k3]}.log &\
 
       done

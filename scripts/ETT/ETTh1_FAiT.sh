@@ -1,22 +1,8 @@
 #!/usr/bin/env bash
 set -eo pipefail
+source ./scripts/fait_routing.bash
+configure_fait_routing ./logs/FAiT/ablation/attn "$@"
 
-# Usage: bash scripts/ETT/ETTh1_FAiT.sh [off|signed|abs|energy] [96|192|336|720]
-route_mode=${1:-${FAIT_SPECTRAL_ROUTING:-off}}
-only_horizon=${2:-all}
-case "$route_mode" in
-    off|signed|abs|energy) ;;
-    *) echo "Unknown spectral routing mode: $route_mode" >&2; exit 2 ;;
-esac
-case "$only_horizon" in
-    all|96|192|336|720) ;;
-    *) echo "Unsupported forecast horizon: $only_horizon" >&2; exit 2 ;;
-esac
-log_dir=./logs/FAiT/ablation/attn
-if [[ "$route_mode" != off ]]; then
-    log_dir=./logs/FAiT/spectral_routing/"$route_mode"
-fi
-mkdir -p "$log_dir"
 
 model_name=FAiT
 # forecasting_ETTh1_FAiT_96_96_e1_s0_p1_o1_attn_ablation_250823_114332_FAiT_ETTh1_sl-96_pl-96_var-7_dm-1024_stages-4_2P2i_1P1i_dec-2_des-Exp_0  
