@@ -1,0 +1,29 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Local credentials
+.env
+.env.*
+!.env.example
+
+# Training outputs and logs
+checkpoints/
+test_results/
+results/
+logs/
+runs/
+wandb/
+*.log
+result_long_term_forecast.txt
+
+# OS and downloaded-file metadata
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
