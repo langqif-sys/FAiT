@@ -190,6 +190,9 @@ if __name__ == '__main__':
                              'or 3h')
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
+    parser.add_argument('--daily_template', type=int, choices=(0, 1),
+                        default=os.environ.get('FAIT_DAILY_TEMPLATE', '0'),
+                        help='subtract a training-only hourly profile and restore it after forecasting')
     parser.add_argument('--spectral_routing', choices=('off', 'signed', 'abs', 'energy'),
                         default=os.environ.get('FAIT_SPECTRAL_ROUTING', 'off'),
                         help='FAiT filter routing: original, signed/absolute band change, or band energy share')
@@ -308,6 +311,9 @@ if __name__ == '__main__':
 
     # args.model_id
     model_id_ori = args.model_id
+    if args.daily_template:
+        model_id_ori += '_daily'
+        args.checkpoints = os.path.join(args.checkpoints, 'daily')
     if args.spectral_routing != 'off':
         model_id_ori += '_route-' + args.spectral_routing
         args.checkpoints = os.path.join(args.checkpoints, 'route-' + args.spectral_routing)

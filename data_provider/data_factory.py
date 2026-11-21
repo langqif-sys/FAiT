@@ -33,6 +33,10 @@ def data_provider(args, flag, test_batch_size=None):
     Data = data_dict[args2.data]
     timeenc = 0 if args2.embed != 'timeF' else 1
 
+    daily_template = bool(getattr(args2, 'daily_template', False))
+    if daily_template and Data not in (Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom):
+        raise ValueError("The daily template requires a dataset with calendar timestamps")
+
     if flag == 'test':
         shuffle_flag = False
         drop_last = False  # do not drop
@@ -99,17 +103,18 @@ def data_provider(args, flag, test_batch_size=None):
         )
 
     else:
-        data_set = Data(
-            root_path=args2.root_path,
-            data_path=args2.data_path,
-            flag=flag,
-            size=[args2.seq_len, args2.label_len, args2.pred_len],
-            features=args2.features,
-            target=args2.target,
-            timeenc=timeenc,
-            freq=freq,
-            train_ratio=args2.train_ratio
-        )
+        kwargs = dict(root_path=args2.root_path, data_path=args2.data_path,
+                      size=[args2.seq_len, args2.label_len, args2.pred_len], features=args2.features,
+                      target=args2.target, timeenc=timeenc, freq=freq)
+        if daily_template:
+            kwargs['daily_template'] = True
+        if flag == 'pred':
+            if daily_template:
+                kwargs['training_set'] = data_dict[args2.data](
+                    flag='train', train_ratio=args2.train_ratio, **kwargs)
+        else:
+            kwargs['train_ratio'] = args2.train_ratio
+        data_set = Data(flag=flag, **kwargs)
 
     print(flag, len(data_set))
     data_loader = DataLoader(

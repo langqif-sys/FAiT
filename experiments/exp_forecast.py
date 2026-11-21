@@ -1,4 +1,5 @@
 from data_provider.data_factory import data_provider
+from data_provider.data_loader import fit_daily_cycle
 from experiments.exp_basic import Exp_Basic
 from utils.tools import (EarlyStopping, adjust_learning_rate, visual, write_into_xls, compute_gradient_norm,
                          find_most_recently_modified_subfolder, compare_prefix_before_third_underscore, compute_weights)
@@ -41,6 +42,13 @@ def compute_model_stats(model, args, num_iterations=50):
 
     device = torch.device("cuda")
 
+    def profile_args(x):
+        if not getattr(args, 'daily_template', False):
+            return (x,)
+        history_hours = x.new_zeros((x.size(0), args.seq_len, 1))
+        future_hours = x.new_zeros((x.size(0), args.pred_len, 1))
+        return x, history_hours, x, future_hours
+
     input_size = (1, args.seq_len, args.enc_in)
     inputs = torch.randn(input_size).to(device)
 
@@ -51,7 +59,7 @@ def compute_model_stats(model, args, num_iterations=50):
     print(f"Parameters(M): {params:.3f}")
 
     # use fvcore to get flops
-    flops = FlopCountAnalysis(model, inputs)
+    flops = FlopCountAnalysis(model, profile_args(inputs))
     flops = flops.total() / 1e6
 
     print(f"FLOPS(M): {flops:.3f}")
@@ -64,6 +72,8 @@ def compute_model_stats(model, args, num_iterations=50):
     #  training and inferring
     inputs = torch.randn(args.batch_size, args.seq_len, args.enc_in).to(device)
 
+    model_args = profile_args(inputs)
+
     # inference, make gpu memory more precise
     torch.cuda.reset_peak_memory_stats()
     inference_times = []
@@ -71,10 +81,10 @@ def compute_model_stats(model, args, num_iterations=50):
         start_time = time.time()
         if args.use_amp:
             with torch.cuda.amp.autocast():
-                _ = model(inputs)
+                _ = model(*model_args)
         else:
             with torch.no_grad():
-                _ = model(inputs)
+                _ = model(*model_args)
 
         inference_times.append(time.time() - start_time)
     avg_inference_time = np.mean(inference_times[-10:])
@@ -92,7 +102,7 @@ def compute_model_stats(model, args, num_iterations=50):
         # torch.cuda.reset_peak_memory_stats()
         start_time = time.time()
         optimizer.zero_grad()
-        outputs = model(inputs)
+        outputs = model(*model_args)
         loss = criterion(outputs, targets)
 
         scaler = None
@@ -296,6 +306,9 @@ class Exp_Forecast(Exp_Basic):
 
     def train(self, setting=None):
         train_data, train_loader = self._get_data(flag='train')
+        if getattr(self.args, 'daily_template', False):
+            backbone = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
+            backbone.daily_cycle.copy_(torch.as_tensor(fit_daily_cycle(train_data)))
         vali_data, vali_loader = self._get_data(flag='valid', test_batch_size=self.args.batch_size)
         test_data, test_loader = self._get_data(flag='test', test_batch_size=self.args.batch_size)
 

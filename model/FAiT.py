@@ -117,6 +117,10 @@ class Model(nn.Module):
         )
         trunc_normal_(self.complex_weights, std=1e-5)
 
+        self.use_daily_template = bool(getattr(configs, "daily_template", False))
+        if self.use_daily_template:
+            self.register_buffer("daily_cycle", torch.zeros(24, self.enc_in))
+
         self.spectral_routing = getattr(configs, "spectral_routing", "off")
         if self.spectral_routing not in ("off", "signed", "abs", "energy"):
             raise ValueError(f"Unknown spectral_routing mode: {self.spectral_routing}")
@@ -228,6 +232,13 @@ class Model(nn.Module):
         # x: [Batch, Input length, Channel]
         B, T, N = x.shape #32 96 7
 
+        if self.use_daily_template:
+            if (x_mark_enc is None or x_mark_dec is None or x_mark_enc.shape != (B, T, 1)
+                    or x_mark_dec.shape[0] != B or x_mark_dec.shape[1] < self.pred_len
+                    or x_mark_dec.shape[-1] != 1):
+                raise ValueError("Daily FAiT needs raw clock hours for each history and forecast step")
+            x = x - self.daily_cycle[x_mark_enc[..., 0].long()]
+
         # revin norm
         x = self.revin_layer(x, mode='norm') #32 96 7
         route_features = self.spectral_route_features(x) if self.spectral_routing != "off" else None
@@ -249,5 +260,7 @@ class Model(nn.Module):
 
         # revin denorm
         out = self.revin_layer(out, mode='denorm')
+        if self.use_daily_template:
+            out = out + self.daily_cycle[x_mark_dec[:, -self.pred_len:, 0].long()]
 
         return out

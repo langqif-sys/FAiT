@@ -3,11 +3,20 @@ configure_fait_routing() {
     local default_log_dir=$1
     shift
     if (( $# > 2 )); then
-        echo "Usage: bash $0 [off|signed|abs|energy] [96|192|336|720]" >&2
+        echo "Usage: bash $0 [off|signed|abs|energy|daily] [96|192|336|720]" >&2
         return 2
     fi
     route_mode=${1:-${FAIT_SPECTRAL_ROUTING:-off}}
     only_horizon=${2:-all}
+    export FAIT_DAILY_TEMPLATE=${FAIT_DAILY_TEMPLATE:-0}
+    if [[ "$route_mode" == daily ]]; then
+        route_mode=off
+        FAIT_DAILY_TEMPLATE=1
+    fi
+    case "$FAIT_DAILY_TEMPLATE" in
+        0|1) ;;
+        *) echo "FAIT_DAILY_TEMPLATE must be 0 or 1" >&2; return 2 ;;
+    esac
     case "$route_mode" in
         off|signed|abs|energy) ;;
         *) echo "Unknown spectral routing mode: $route_mode" >&2; return 2 ;;
@@ -20,6 +29,9 @@ configure_fait_routing() {
     if [[ "$route_mode" != off ]]; then
         log_dir="./logs/FAiT/spectral_routing/$route_mode"
     fi
+    if [[ "$FAIT_DAILY_TEMPLATE" == 1 ]]; then
+        log_dir="./logs/FAiT/daily_template/$route_mode"
+    fi
     mkdir -p "$log_dir"
-    printf 'FAiT spectral_routing=%s  horizon=%s\n' "$route_mode" "$only_horizon"
+    printf 'FAiT spectral_routing=%s  horizon=%s  daily_template=%s\n' "$route_mode" "$only_horizon" "$FAIT_DAILY_TEMPLATE"
 }

@@ -10,10 +10,20 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+def fit_daily_cycle(train_set):
+    """Estimate a centered hourly profile on unique scaled training rows (before windowing)."""
+    if train_set.flag != 'train' or not train_set.daily_template:
+        raise ValueError("Fit the daily cycle using a calendar-enabled training split")
+    hours = train_set.data_stamp[:, 0]
+    by_hour = pd.DataFrame(train_set.data_x).groupby(hours).mean().reindex(range(24))
+    # For unobserved hours, fall back to a zero seasonal adjustment.
+    return (by_hour - by_hour.mean()).fillna(0).to_numpy(dtype=np.float32)
+
+
 class Dataset_ETT_hour(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='ETTh1.csv',
-                 target='OT', scale=True, timeenc=0, freq='h', train_ratio=1.0):
+                 target='OT', scale=True, timeenc=0, freq='h', train_ratio=1.0, daily_template=False):
         # size [seq_len, label_len, pred_len]
         # info
         if size is None:
@@ -34,6 +44,7 @@ class Dataset_ETT_hour(Dataset):
         self.features = features
         self.target = target
         self.scale = scale
+        self.daily_template = daily_template
         self.timeenc = timeenc
         self.freq = freq
 
@@ -70,7 +81,10 @@ class Dataset_ETT_hour(Dataset):
 
         df_stamp = df_raw[['date']][border1:border2]
         df_stamp['date'] = pd.to_datetime(df_stamp.date)
-        if self.timeenc == 0:
+        if self.daily_template:
+            # FAiT indexes its template by the actual wall-clock hour.
+            data_stamp = pd.DatetimeIndex(df_stamp['date']).hour.to_numpy()[:, None]
+        elif self.timeenc == 0:
             df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
             df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
             df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
@@ -83,6 +97,8 @@ class Dataset_ETT_hour(Dataset):
         self.data_x = data[border1:border2]
         self.data_y = data[border1:border2]
         self.data_stamp = data_stamp
+        if self.daily_template:
+            self.feature_columns = list(df_data.columns)
 
     def __getitem__(self, index):
         s_begin = index
@@ -107,7 +123,7 @@ class Dataset_ETT_hour(Dataset):
 class Dataset_ETT_minute(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='ETTm1.csv',
-                 target='OT', scale=True, timeenc=0, freq='t', train_ratio=1.0):
+                 target='OT', scale=True, timeenc=0, freq='t', train_ratio=1.0, daily_template=False):
         # size [seq_len, label_len, pred_len]
         # info
         if size is None:
@@ -126,6 +142,7 @@ class Dataset_ETT_minute(Dataset):
         self.features = features
         self.target = target
         self.scale = scale
+        self.daily_template = daily_template
         self.timeenc = timeenc
         self.freq = freq
         self.flag = flag
@@ -164,7 +181,10 @@ class Dataset_ETT_minute(Dataset):
 
         df_stamp = df_raw[['date']][border1:border2]
         df_stamp['date'] = pd.to_datetime(df_stamp.date)
-        if self.timeenc == 0:
+        if self.daily_template:
+            # FAiT indexes its template by the actual wall-clock hour.
+            data_stamp = pd.DatetimeIndex(df_stamp['date']).hour.to_numpy()[:, None]
+        elif self.timeenc == 0:
             df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
             df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
             df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
@@ -179,6 +199,8 @@ class Dataset_ETT_minute(Dataset):
         self.data_x = data[border1:border2]
         self.data_y = data[border1:border2]
         self.data_stamp = data_stamp
+        if self.daily_template:
+            self.feature_columns = list(df_data.columns)
 
     def __getitem__(self, index):
         s_begin = index
@@ -203,7 +225,7 @@ class Dataset_ETT_minute(Dataset):
 class Dataset_Custom(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='ETTh1.csv',
-                 target='OT', scale=True, timeenc=0, freq='h', AirDataset=False, Physio=False, train_ratio=1.0):
+                 target='OT', scale=True, timeenc=0, freq='h', AirDataset=False, Physio=False, train_ratio=1.0, daily_template=False):
         # size [seq_len, label_len, pred_len]
         # info
         if size is None:
@@ -222,6 +244,7 @@ class Dataset_Custom(Dataset):
         self.features = features
         self.target = target
         self.scale = scale
+        self.daily_template = daily_template
         self.timeenc = timeenc
         self.freq = freq
         self.AirDataset = AirDataset
@@ -306,7 +329,10 @@ class Dataset_Custom(Dataset):
 
         df_stamp = df_raw[['date']][border1:border2]
         df_stamp['date'] = pd.to_datetime(df_stamp.date)
-        if self.timeenc == 0:
+        if self.daily_template:
+            # FAiT indexes its template by the actual wall-clock hour.
+            data_stamp = pd.DatetimeIndex(df_stamp['date']).hour.to_numpy()[:, None]
+        elif self.timeenc == 0:
             df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
             df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
             df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
@@ -321,6 +347,8 @@ class Dataset_Custom(Dataset):
             self.data_x2 = data2[border1:border2]
         self.data_y = data[border1:border2]
         self.data_stamp = data_stamp
+        if self.daily_template:
+            self.feature_columns = list(df_data.columns)
 
     def __getitem__(self, index):
         s_begin = index * 48 if self.Physio else index
@@ -668,7 +696,8 @@ class Dataset_Pred(Dataset):
     # special dataset for pred
     def __init__(self, root_path, flag='pred', size=None,
                  features='S', data_path='ETTh1.csv',
-                 target='OT', scale=True, inverse=False, timeenc=0, freq='15min', cols=None):
+                 target='OT', scale=True, inverse=False, timeenc=0, freq='15min', cols=None,
+                 daily_template=False, training_set=None):
         # basically inverse means original
         # size [seq_len, label_len, pred_len]
         # info
@@ -687,28 +716,36 @@ class Dataset_Pred(Dataset):
         self.target = target
         self.scale = scale
         self.inverse = inverse
+        self.daily_template = daily_template
         self.timeenc = timeenc
         self.freq = freq
         self.cols = cols
         self.root_path = root_path
         self.data_path = data_path
-        self.__read_data__()
+        self.__read_data__(training_set)
 
-    def __read_data__(self):
+    def __read_data__(self, training_set):
         self.scaler = StandardScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
-        if self.cols:
-            cols = self.cols.copy()
-            cols.remove(self.target)
+        if self.daily_template:
+            # Use the training scaler and the exact same feature order on new timestamps.
+            if training_set is None:
+                raise ValueError("Daily prediction needs the training scaler and feature order")
+            self.scaler = training_set.scaler
+            df_raw = df_raw[['date'] + training_set.feature_columns]
         else:
-            cols = list(df_raw.columns)
-            cols.remove(self.target)
-            cols.remove('date')
-        df_raw = df_raw[['date'] + cols + [self.target]]
+            if self.cols:
+                cols = self.cols.copy()
+                cols.remove(self.target)
+            else:
+                cols = list(df_raw.columns)
+                cols.remove(self.target)
+                cols.remove('date')
+            df_raw = df_raw[['date'] + cols + [self.target]]
         border1 = len(df_raw) - self.seq_len
         border2 = len(df_raw)
 
@@ -719,18 +756,28 @@ class Dataset_Pred(Dataset):
             df_data = df_raw[[self.target]]
 
         if self.scale:
-            self.scaler.fit(df_data.values)
+            if not self.daily_template:
+                self.scaler.fit(df_data.values)
             data = self.scaler.transform(df_data.values)
         else:
             data = df_data.values
 
         tmp_stamp = df_raw[['date']][border1:border2]
         tmp_stamp['date'] = pd.to_datetime(tmp_stamp.date)
-        pred_dates = pd.date_range(tmp_stamp.date.values[-1], periods=self.pred_len + 1, freq=self.freq)
+        step = self.freq
+        if self.daily_template:
+            gaps = pd.to_datetime(df_raw['date'].iloc[-max(3, self.seq_len):]).diff().dropna()
+            if gaps.empty or (gaps <= pd.Timedelta(0)).any():
+                raise ValueError("Daily forecasting needs increasing historical timestamps")
+            step = gaps.mode().iloc[0]
+        pred_dates = pd.date_range(tmp_stamp.date.values[-1], periods=self.pred_len + 1, freq=step)
 
         df_stamp = pd.DataFrame(columns=['date'])
         df_stamp.date = list(tmp_stamp.date.values) + list(pred_dates[1:])
-        if self.timeenc == 0:
+        if self.daily_template:
+            # FAiT indexes its template by the actual wall-clock hour.
+            data_stamp = pd.DatetimeIndex(df_stamp['date']).hour.to_numpy()[:, None]
+        elif self.timeenc == 0:
             df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
             df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
             df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
